@@ -13,17 +13,7 @@ class DownloadProgressBar(object):
         self.vk_filename = vk_filename
 
     def show(self, written_len, remote_len):
-        if self.multithreading:
-            try:
-                cur_thread = int(threading.current_thread().getName()) - 1
-            except Exception as e:
-                print "[%s] #%d:%s [thread=%s]" % (e, (self.idx + 1), self.short_name, cur_thread)
-                sys.exit(1)
-
-            sys.stdout.write('\r' + '\t' * (cur_thread * 3)  + "#%-5d(%-5.02fMB %3d%%)" % (self.idx + 1, written_len / MB, 100.0 * written_len / remote_len))
-        else:
-            sys.stdout.write("\r#%-5d %-65s[%-10s](%-5.02fMB %3d%%)" % (self.idx + 1, self.short_name, self.vk_filename, written_len / MB, 100.0 * written_len / remote_len))
-        sys.stdout.flush()
+        pass
 
 def download_file(filename, url, local_len, remote_len, progress_bar=None):
     req = urllib2.Request(url)

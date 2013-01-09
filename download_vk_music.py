@@ -95,4 +95,4 @@ if __name__ == "__main__":
     try:
         main(sys.argv[1:])
     except KeyboardInterrupt as e:
-        logging.critical("\nInterrupted.")
+        logging.critical("Interrupted.")

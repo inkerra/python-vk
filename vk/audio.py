@@ -1,6 +1,7 @@
 import urllib2
 from lxml import html
 import os
+import sys
 import threading
 import Queue
 import logging
@@ -15,6 +16,22 @@ MAX_TITLE_LEN = 60
 SHORT_ARTIST_LIM = 30
 SHORT_TITLE_LIM= 30
 
+class AudioDownloadProgressBar(DownloadProgressBar):
+    def show(self, written_len, remote_len):
+        if self.multithreading:
+            try:
+                cur_thread = int(threading.current_thread().getName()) - 1
+            except Exception as e:
+                print "[%s] #%d:%s [thread=%s]" % (e, (self.idx + 1), self.short_name, cur_thread)
+                sys.exit(1)
+
+            sys.stdout.write('\r' + '\t' * (cur_thread * 3)  + "#%-5d(%-5.02fMB %3d%%)" \
+                % (self.idx + 1, written_len / MB, 100.0 * written_len / remote_len))
+        else:
+            sys.stdout.write("\r#%-5d %-66s[%-10s](%-5.02fMB %3d%%)" \
+                % (self.idx + 1, self.short_name, self.vk_filename, written_len / MB, 100.0 * written_len / remote_len))
+        sys.stdout.flush()
+
 def get_name(audio, a_lim=MAX_ARTIST_LEN, t_lim=MAX_TITLE_LEN, tail=''):
     escape = lambda t: '' if t is None or len(t) == 0 else HTMLParser().unescape(t).replace(os.sep, '')
     get = lambda audio, elem: get_unicode(escape(audio.find(elem).text))
@@ -26,7 +43,7 @@ def get_name(audio, a_lim=MAX_ARTIST_LEN, t_lim=MAX_TITLE_LEN, tail=''):
         name[:(lim - len(tail))] + tail if len(name) > lim else name
     fund = lambda name, lim: lim - len(name) if lim > len(name) else 0
 
-    return "-".join([ \
+    return "__".join([ \
         cut(artist, a_lim + fund(title, t_lim), tail), \
         cut(title, t_lim + fund(artist, a_lim), tail) \
         ]) + ".mp3"
@@ -56,7 +73,7 @@ def download_audio(audio, idx, amount, path, path_to_links_dir, linkname_fmt, mu
             logging.error("[#%d/%d] \"%s\" (%s, %s bytes)" \
                 % (idx + 1, amount, final_filename, name, remote_len - local_len))
 
-            progress_bar = DownloadProgressBar(idx, multithreading, short_name, name) \
+            progress_bar = AudioDownloadProgressBar(idx, multithreading, short_name, name) \
                 if logging.getLogger().getEffectiveLevel() < logging.ERROR else None
             download_file(vk_filename, url, local_len, remote_len, progress_bar)
 
