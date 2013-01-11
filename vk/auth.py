@@ -4,6 +4,10 @@ import cookielib
 from urlparse import urlparse
 from HTMLParser import HTMLParser
 from HTMLParser import HTMLParseError
+import getpass
+
+PASS_RETRY_COUNT = 3
+APP_ID = 2260052
 
 class AuthenticationError(Exception):
     pass
@@ -28,9 +32,8 @@ class FormParser(HTMLParser):
         attrs = dict((name.lower(), value) for name, value in attrs)
         if tag == "form":
             self.url = attrs["action"]
-        elif tag == "input" and "type" in attrs and "name" in attrs:
-            if attrs["type"] in ("hidden", "text", "password"):
-                self.params[attrs["name"]] = attrs["value"] if "value" in attrs else ""
+        elif tag == "input" and "name" in attrs:
+            self.params[attrs["name"]] = attrs.get("value", "")
 
     def handle_endtag(self, tag):
         tag = tag.lower()
@@ -49,13 +52,14 @@ def __auth(email, password, client_id, scope, opener):
     parser = FormParser()
     parser.feed(resp.read())
     parser.close()
-    if not parser.is_parsed or parser.url is None or "pass" not in parser.params or "email" not in parser.params:
+    if not parser.is_parsed or parser.url is None \
+        or "pass" not in parser.params or "email" not in parser.params:
         raise HTMLParseError("Login form is not parsed well.")
     parser.params["email"] = email
     parser.params["pass"] = password
 
-    resp = opener.open(parser.url, urllib.urlencode(parser.params))
-    return resp.read(), resp.geturl()
+    res = opener.open(parser.url, urllib.urlencode(parser.params))
+    return res.read(), res.geturl()
 
 def __get_access(url, opener):
     doc = opener.open(url).read()
@@ -66,14 +70,30 @@ def __get_access(url, opener):
 
 def auth(email, password, client_id, scope):
     if not isinstance(scope, list): scope = [scope]
-    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookielib.CookieJar()), urllib2.HTTPRedirectHandler())
+    opener = urllib2.build_opener(
+        urllib2.HTTPCookieProcessor(cookielib.CookieJar()),
+        urllib2.HTTPRedirectHandler())
     doc, url = __auth(email, password, client_id, scope, opener)
     if urlparse(url).path != "/blank.html":
         url = __get_access(url, opener)
     if urlparse(url).path != "/blank.html":
-        raise AuthenticationError("Incorrect login or password.")
+        raise AuthenticationError("Can't get access w/ this login/pass.")
 
-    resp = dict(p.split('=') for p in urlparse(url).fragment.split("&"))
-    if "access_token" not in resp or "user_id" not in resp:
+    res = dict(p.split('=') for p in urlparse(url).fragment.split("&"))
+    if "access_token" not in res or "user_id" not in res:
         raise RuntimeError("Bad response.")
-    return resp["access_token"], resp["user_id"]
+    return res["access_token"], res["user_id"]
+
+def console_auth(scope):
+    email = raw_input("Email: ")
+    for retry in range(PASS_RETRY_COUNT):
+        pswd = getpass.getpass()
+        try:
+            access_token, uid = auth(email, pswd, APP_ID, scope)
+        except AuthenticationError as e:
+            print e.message
+        else:
+            break
+    else:
+        raise AuthenticationError("Exceeded maximal retry count.")
+    return access_token, uid

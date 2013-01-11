@@ -1,47 +1,36 @@
 import urllib2
 import sys
 import threading
-from utils import MB
+from utils import MB, remote_file_size, local_file_size
 
-DEFAULT_BLOCK_SIZE = 1024
+BLOCK_SIZE = 1024
 
 class DownloadProgressBar(object):
-    def __init__(self, idx, multithreading=False, short_name=None, vk_filename=None):
+    def __init__(self, idx, multithreading=False, short=None, vk_name=None):
         self.idx = idx
         self.multithreading = multithreading
-        self.short_name = short_name
-        self.vk_filename = vk_filename
+        self.short = short
+        self.vk_name = vk_name
 
     def show(self, written_len, remote_len):
         pass
 
-def download_file(filename, url, local_len, remote_len, progress_bar=None):
+def download_file(path, url, progress_bar=None):
+    remote_sz = remote_file_size(url)
+    sz = local_file_size(path)
+
     req = urllib2.Request(url)
-    req.headers['Range'] = 'bytes=%d-' % local_len
-    try:
-        local_file = open(filename, "wb" if 0 == local_len else "ab")
-        remote_file = urllib2.urlopen(req)
+    req.headers['Range'] = 'bytes=%d-' % sz
 
-        remote_len = remote_len
-        written_len = local_len
+    with open(path, "ab" if sz else "wb") as fd:
+        remote_fd = urllib2.urlopen(req)
+        written = sz
 
-        block_size = DEFAULT_BLOCK_SIZE
-        while written_len < remote_len:
-            block_size = min(block_size, remote_len - written_len)
-            written_len += block_size
-            block = remote_file.read(block_size)
-            local_file.write(block)
-            if progress_bar: progress_bar.show(written_len, remote_len)
-    except Exception as e:
-        raise e
-    finally:
-        local_file.close()
-        remote_file.close()
-
-def get_file_size(url):
-    res = urllib2.urlopen(url)
-    assert res.getcode() == 200, "failed request to get %s" % url
-    return int(res.info().getheader("Content-Length"))
+        while written < remote_sz:
+            block = remote_fd.read(BLOCK_SIZE)
+            fd.write(block)
+            written += len(block)
+            if progress_bar: progress_bar.show(written, remote_sz)
 
 class DownloaderThread(threading.Thread):
     """ Threaded downloader """
