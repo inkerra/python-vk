@@ -64,7 +64,7 @@ def main():
     if audio_list:
         logging.debug("Audio list is downloaded.")
     else:
-        logging.critical("got no audios.")
+        logging.warning("got no audios.")
         return
 
     mkdir(path)

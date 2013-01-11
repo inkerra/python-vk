@@ -2,8 +2,7 @@ import urllib2
 import urllib
 import cookielib
 from urlparse import urlparse
-from HTMLParser import HTMLParser
-from HTMLParser import HTMLParseError
+from HTMLParser import HTMLParser, HTMLParseError
 import getpass
 
 PASS_RETRY_COUNT = 3
