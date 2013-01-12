@@ -42,14 +42,17 @@ class FormParser(HTMLParser):
             self.inside = False
             self.is_parsed = True
 
-def __auth(email, password, client_id, scope, opener):
-    resp = opener.open(
-        "http://oauth.vk.com/oauth/authorize?" + \
-        "redirect_uri=http://oauth.vk.com/blank.html&response_type=token&" + \
-        "client_id=%s&scope=%s&display=wap" % (client_id, ",".join(scope))
-        )
+def __auth(email, password, scope, opener):
+    oauth_url = "http://oauth.vk.com/oauth/authorize?" + \
+    	"redirect_uri=http://oauth.vk.com/blank.html&response_type=token&" + \
+	"client_id=%s&scope=%s&display=page" % (APP_ID, ",".join(scope))
+    try:
+        login_page = opener.open(oauth_url)
+    except urllib2.URLError as e:
+    	raise AuthenticationError("No response from: %s" % oauth_url)
+
     parser = FormParser()
-    parser.feed(resp.read())
+    parser.feed(login_page.read())
     parser.close()
     if not parser.is_parsed or parser.url is None \
         or "pass" not in parser.params or "email" not in parser.params:
@@ -57,7 +60,10 @@ def __auth(email, password, client_id, scope, opener):
     parser.params["email"] = email
     parser.params["pass"] = password
 
-    res = opener.open(parser.url, urllib.urlencode(parser.params))
+    try:
+        res = opener.open(parser.url, urllib.urlencode(parser.params))
+    except urllib2.URLError as e:
+    	raise AuthenticationError("Can't log into: %s" % parser.url)
     return res.read(), res.geturl()
 
 def __get_access(url, opener):
@@ -67,14 +73,17 @@ def __get_access(url, opener):
     parser.close()
     return opener.open(parser.url).geturl()
 
-def auth(email, password, client_id, scope):
+def auth(email, password, scope):
     if not isinstance(scope, list): scope = [scope]
     opener = urllib2.build_opener(
         urllib2.HTTPCookieProcessor(cookielib.CookieJar()),
         urllib2.HTTPRedirectHandler())
-    doc, url = __auth(email, password, client_id, scope, opener)
+    doc, url = __auth(email, password, scope, opener)
     if urlparse(url).path != "/blank.html":
-        url = __get_access(url, opener)
+        try:
+            url = __get_access(url, opener)
+	except urllib2.URLError as e:
+	    raise AuthenticationError("Unavailable url to get access.")
     if urlparse(url).path != "/blank.html":
         raise AuthenticationError("Can't get access w/ this login/pass.")
 
@@ -83,16 +92,22 @@ def auth(email, password, client_id, scope):
         raise RuntimeError("Bad response.")
     return res["access_token"], res["user_id"]
 
-def console_auth(scope):
-    email = raw_input("Email: ")
-    for retry in range(PASS_RETRY_COUNT):
-        pswd = getpass.getpass()
-        try:
-            access_token, uid = auth(email, pswd, APP_ID, scope)
-        except AuthenticationError as e:
-            print e.message
-        else:
-            break
+def console_auth(scope, email=None, passwd=None):
+    while not email:
+        email = raw_input("Phone or email: ")
+
+    if passwd:
+        access_token, uid = auth(email, passwd, scope)
     else:
-        raise AuthenticationError("Exceeded maximal retry count.")
+        for retry in range(PASS_RETRY_COUNT):
+            passwd = getpass.getpass()
+            try:
+                access_token, uid = auth(email, passwd, scope)
+            except AuthenticationError as e:
+                print e.message
+            else:
+                break
+        else:
+            raise AuthenticationError("Exceeded maximal retry count.")
+
     return access_token, uid

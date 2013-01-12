@@ -6,11 +6,12 @@ from utils import MB, remote_file_size, local_file_size
 BLOCK_SIZE = 1024
 
 class DownloadProgressBar(object):
-    def __init__(self, idx, multithreading=False, short=None, vk_name=None):
+    def __init__(self, idx, total, multithreading=False, name=None):
         self.idx = idx
+        self.total = total
+	self.w = str(len(str(self.total)))
         self.multithreading = multithreading
-        self.short = short
-        self.vk_name = vk_name
+        self.name = name
 
     def show(self, written_len, remote_len):
         pass

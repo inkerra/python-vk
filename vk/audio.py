@@ -9,12 +9,11 @@ from download import download_file, DownloadProgressBar, DownloaderThread
 from utils import *
 import re
 import math
-from HTMLParser import HTMLParser
 
 MAX_ARTIST_LEN = 40
 MAX_TITLE_LEN = 60
-SHORT_ARTIST_LIM = 30
-SHORT_TITLE_LIM= 30
+SHORT_ARTIST_LIM = 15
+SHORT_TITLE_LIM = 23
 NAME_FMT = "%s__%s.mp3"
 
 class AudioDownloadProgressBar(DownloadProgressBar):
@@ -29,11 +28,11 @@ class AudioDownloadProgressBar(DownloadProgressBar):
                     100.0 * written_len / remote_sz
                 )
         else:
-            progress = "\r#%-5d %-66s[%-10s](%-5.02fMB %3d%%)" \
+            progress = ("\r#%0" + self.w + "d/%d %-45s (%-5.02fMB %3d%%)") \
                 % (
                     self.idx + 1,
-                    self.short,
-                    self.vk_name,
+		    self.total,
+                    self.name,
                     written_len / MB,
                     100.0 * written_len / remote_sz
                 )
@@ -44,9 +43,7 @@ class AudioDownloadProgressBar(DownloadProgressBar):
 def get_name(audio, a_lim=MAX_ARTIST_LEN, t_lim=MAX_TITLE_LEN, tail=''):
     def get(audio, elem):
         t = audio.find(elem).text
-        if t:
-            return get_unicode(HTMLParser().unescape(t).replace(os.sep, ''))
-        return u''
+        return valid_filename(t) if t else u''
 
     artist = (get(audio, 'artist'), a_lim)
     title = (get(audio, 'title'), t_lim)
@@ -78,12 +75,13 @@ def download_audio((i, audio), amount, path, lnks_path, lnk_fmt, m_th=True):
 
         short = get_name(audio, SHORT_ARTIST_LIM, SHORT_TITLE_LIM, '...')
         if sz != remote_sz:
-            logging.warning("[#%d/%d] \"%s\" (%s, %s bytes)",
-                i + 1, amount, filename, name, remote_sz - sz)
+            logging.log(logging.WARNING if m_th else logging.DEBUG,
+	    	"[#%d/%d] \"%s\" (%s, %s bytes)",
+		i + 1, amount, filename, name, remote_sz - sz)
 
             if logging.getLogger().isEnabledFor(logging.INFO):
                 progress_bar = \
-                    AudioDownloadProgressBar(i, m_th, short, name)
+                    AudioDownloadProgressBar(i, amount, m_th, short)
             else:
                 progress_bar = None
 
@@ -100,12 +98,16 @@ def download_audio((i, audio), amount, path, lnks_path, lnk_fmt, m_th=True):
     new_path = norm_path(relpath, basename)
 
     lnk = lnk_fmt % (i + 1, basename)
+
+    if sys.platform.startswith('win'):
+    	lnk = ''.join(lnk.rpartition('.')[:-1] + ('lnk',))
+
     lnk_path = norm_path(path, lnk)
 
     try:
-        os.symlink(new_path, lnk_path)
-    except OSError as e:
-        raise RuntimeError("Can't create symlink: %s -> %s" \
+        symlink(new_path, lnk_path)
+    except Exception as e:
+        raise RuntimeError("Can't create link: %s -> %s" \
             % (lnk_path, new_path))
     logging.debug("[#%d] %s -> %s", i + 1, lnk, new_path)
     return basename
@@ -143,7 +145,7 @@ def download_audio_list(th_pool_sz, audio_list, path, lnk_dir, ans=None):
     logging.warning("All Done.")
 
     root, dirs, files = os.walk(path).next()
-    files = [get_unicode(re.match('.*[.]mp3', f).group()) for f in files]
+    files = [valid_filename(re.match('.*[.]mp3', f).group()) for f in files]
 
     old_files = [f for f in files if f not in vk_files]
 
