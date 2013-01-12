@@ -44,12 +44,12 @@ class FormParser(HTMLParser):
 
 def __auth(email, password, scope, opener):
     oauth_url = "http://oauth.vk.com/oauth/authorize?" + \
-    	"redirect_uri=http://oauth.vk.com/blank.html&response_type=token&" + \
-	"client_id=%s&scope=%s&display=page" % (APP_ID, ",".join(scope))
+        "redirect_uri=http://oauth.vk.com/blank.html&response_type=token&" + \
+        "client_id=%s&scope=%s&display=page" % (APP_ID, ",".join(scope))
     try:
         login_page = opener.open(oauth_url)
     except urllib2.URLError as e:
-    	raise AuthenticationError("No response from: %s" % oauth_url)
+        raise AuthenticationError("No response from: %s" % oauth_url)
 
     parser = FormParser()
     parser.feed(login_page.read())
@@ -63,7 +63,7 @@ def __auth(email, password, scope, opener):
     try:
         res = opener.open(parser.url, urllib.urlencode(parser.params))
     except urllib2.URLError as e:
-    	raise AuthenticationError("Can't log into: %s" % parser.url)
+        raise AuthenticationError("Can't log into: %s" % parser.url)
     return res.read(), res.geturl()
 
 def __get_access(url, opener):
@@ -82,8 +82,8 @@ def auth(email, password, scope):
     if urlparse(url).path != "/blank.html":
         try:
             url = __get_access(url, opener)
-	except urllib2.URLError as e:
-	    raise AuthenticationError("Unavailable url to get access.")
+        except urllib2.URLError as e:
+            raise AuthenticationError("Unavailable url to get access.")
     if urlparse(url).path != "/blank.html":
         raise AuthenticationError("Can't get access w/ this login/pass.")
 

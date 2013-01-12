@@ -9,6 +9,7 @@ from download import download_file, DownloadProgressBar, DownloaderThread
 from utils import *
 import re
 import math
+from glob import glob
 
 MAX_ARTIST_LEN = 40
 MAX_TITLE_LEN = 60
@@ -31,7 +32,7 @@ class AudioDownloadProgressBar(DownloadProgressBar):
             progress = ("\r#%0" + self.w + "d/%d %-45s (%-5.02fMB %3d%%)") \
                 % (
                     self.idx + 1,
-		    self.total,
+                    self.total,
                     self.name,
                     written_len / MB,
                     100.0 * written_len / remote_sz
@@ -55,9 +56,9 @@ def get_name(audio, a_lim=MAX_ARTIST_LEN, t_lim=MAX_TITLE_LEN, tail=''):
     return NAME_FMT % (cut(artist, title, tail), cut(title, artist, tail))
 
 def download_audio((i, audio), amount, path, lnks_path, lnk_fmt, m_th=True):
-    basename = get_name(audio)
+    base = get_name(audio)
 
-    filename = norm_path(path, basename)
+    filename = norm_path(path, base)
 
     if os.path.exists(filename):
         logging.debug("[%d/%d] \"%s\" has been downloaded.",
@@ -76,8 +77,8 @@ def download_audio((i, audio), amount, path, lnks_path, lnk_fmt, m_th=True):
         short = get_name(audio, SHORT_ARTIST_LIM, SHORT_TITLE_LIM, '...')
         if sz != remote_sz:
             logging.log(logging.WARNING if m_th else logging.DEBUG,
-	    	"[#%d/%d] \"%s\" (%s, %s bytes)",
-		i + 1, amount, filename, name, remote_sz - sz)
+                "[#%d/%d] \"%s\" (%s, %s bytes)",
+                i + 1, amount, filename, name, remote_sz - sz)
 
             if logging.getLogger().isEnabledFor(logging.INFO):
                 progress_bar = \
@@ -95,12 +96,12 @@ def download_audio((i, audio), amount, path, lnks_path, lnk_fmt, m_th=True):
 
     relpath = os.path.relpath(os.path.abspath(path),
                                 os.path.abspath(lnks_path))
-    new_path = norm_path(relpath, basename)
+    new_path = norm_path(relpath, base)
 
-    lnk = lnk_fmt % (i + 1, basename)
+    lnk = lnk_fmt % (i + 1, base)
 
     if sys.platform.startswith('win'):
-    	lnk = ''.join(lnk.rpartition('.')[:-1] + ('lnk',))
+        lnk = ''.join(lnk.rpartition('.')[:-1] + ('lnk',))
 
     lnk_path = norm_path(path, lnk)
 
@@ -110,7 +111,7 @@ def download_audio((i, audio), amount, path, lnks_path, lnk_fmt, m_th=True):
         raise RuntimeError("Can't create link: %s -> %s" \
             % (lnk_path, new_path))
     logging.debug("[#%d] %s -> %s", i + 1, lnk, new_path)
-    return basename
+    return base
 
 def download_audio_list(th_pool_sz, audio_list, path, lnk_dir, ans=None):
     amount = len(audio_list)
@@ -118,7 +119,7 @@ def download_audio_list(th_pool_sz, audio_list, path, lnk_dir, ans=None):
     lnk_fmt = norm_path(lnk_dir, int(1 + math.log10(amount)), "%%0%dd=%%s")
     lnks_path = norm_path(path, lnk_dir)
 
-    vk_files = []
+    vk_names = []
 
     params = (amount, path, lnks_path, lnk_fmt)
     audios = enumerate(audio_list)
@@ -138,28 +139,25 @@ def download_audio_list(th_pool_sz, audio_list, path, lnk_dir, ans=None):
         params_q.join()
 
         while res_q.qsize():
-            vk_files.append(res_q.get())
+            vk_names.append(res_q.get())
     else:
-        vk_files = [download_audio(p, *params, m_th=False) for p in audios]
+        vk_names = [download_audio(p, *params, m_th=False) for p in audios]
 
     logging.warning("All Done.")
 
-    root, dirs, files = os.walk(path).next()
-    files = [valid_filename(re.match('.*[.]mp3', f).group()) for f in files]
+    files = glob(os.path.join(path, '*.mp3'))
+    old = [f for f in files if basename(f) not in vk_names]
 
-    old_files = [f for f in files if f not in vk_files]
-
-    logging.info('Outdated audios:\n' + '\n'.join(old_files))
-
-    if len(old_files):
-        if ans is None:
-            ans = raw_input("Delete outdated audios?[%d] (y or n) [n] "\
-                %  len(old_files))
+    if old:
+        logging.info('Outdated audios:\n' + '\n'.join(old))
+        if not ans:
+            prompt = "Delete outdated audios?[%d] (y or n) [n] " %  len(old)
+            ans = raw_input(prompt)
         if ans.strip().lower().startswith('y'):
-            for f in old_files:
+            for f in old:
                 logging.debug("Deleting %s ...", f)
-                os.remove(norm_path(path, f))
-            logging.warning("Deleted outdated files [%d].", len(old_files))
+                os.remove(f)
+            logging.warning("Deleted outdated files [%d].", len(old))
 
 def get_audio_list(user_id, access_token):
     url = "https://api.vkontakte.ru/method/audio.get.xml?uid=%s&access_token=%s" % (user_id, access_token)

@@ -45,9 +45,9 @@ def main():
         elif opt == 'silent':
             if arg: logging.getLogger().setLevel(logging.CRITICAL)
         elif opt == 'login':
-	     login = arg
+            login = arg
         elif opt == 'passwd':
-	     passwd = arg
+            passwd = arg
         elif opt == 'th_pool_sz':
             th_pool_sz = arg
         elif opt == 'user_id':
