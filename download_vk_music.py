@@ -21,52 +21,54 @@ def options():
         help='login (phone or email)')
     parser.add_argument('-p', '--passwd', metavar='PASSWD',
         help='password')
-    parser.add_argument('-r', '--reverse', action='store_true',
+    parser.add_argument('-r', '--reverse', action='store_false',
         help='download new audios first')
     parser.add_argument('-j', '--th_pool_sz', metavar='N', type=int,
         default=0, choices=range(2, 8), help='max thread pool size')
     parser.add_argument('-u', '--user_id', metavar='UID', type=int,
         help="user's id, whose audios will be downloaded")
-    parser.add_argument('-d', '--dir', metavar='DIR', default='.',
-        help='directory path to save audios')
-    parser.add_argument('--links_dir', metavar='DIR', default='playlist',
-        help="directory name to save playlist's links")
-    parser.add_argument('-f', '--force', choices='yn',
-        help='force answer to questions')
+    parser.add_argument('-d', '--dir', metavar='DIRPATH', default='.',
+        help='directory path to download audios')
+    parser.add_argument('-n', '--dirname', metavar='DIRNAME', default='download',
+        help='storage directory name in DIRPATH')
+    parser.add_argument('--links_dirname', metavar='DIRNAME', default='playlist',
+        help="links directory name to save playlist's links")
+    parser.add_argument('-a', '--answer', choices='yn',
+        help='auto answer to questions')
 
-    return vars(parser.parse_args()).items()
+    return vars(parser.parse_args())
 
 def main():
-    for opt, arg in options():
-        if opt == 'verbose':
-            if arg: logging.getLogger().setLevel(logging.DEBUG)
-        elif opt == 'quiet':
-            if arg: logging.getLogger().setLevel(logging.WARNING)
-        elif opt == 'silent':
-            if arg: logging.getLogger().setLevel(logging.CRITICAL)
-        elif opt == 'login':
-            login = arg
-        elif opt == 'passwd':
-            passwd = arg
-        elif opt == 'th_pool_sz':
-            th_pool_sz = arg
-        elif opt == 'user_id':
-            user_id = arg
-        elif opt == 'dir':
-            dir = arg
-        elif opt == 'links_dir':
-            links_dir = arg
-        elif opt == 'reverse':
-            reverse = arg
-        elif opt == 'force':
-            ans = arg
+    opts = options()
+
+    if opts['verbose']:
+        logging.getLogger().setLevel(logging.DEBUG)
+    elif opts['quiet']:
+        logging.getLogger().setLevel(logging.WARNING)
+    elif opts['silent']:
+        logging.getLogger().setLevel(logging.CRITICAL)
+
+    login = opts['login']
+    passwd = opts['passwd']
+
+    th_pool_sz = opts['th_pool_sz']
+
+    user_id = opts['user_id']
+
+    path = os.path.join(opts['dir'], opts['dirname'])
+
+    links_dir = os.path.join(opts['dir'], opts['links_dirname'])
+
+    reverse = opts['reverse']
+
+    ans = opts['answer']
 
     access_token, uid = auth.console_auth("audio", login, passwd)
 
     if user_id: uid = user_id
 
     audio_list = audio.get_audio_list(uid, access_token)
-    if not reverse:
+    if reverse:
         audio_list.reverse()
 
     if audio_list:
@@ -75,10 +77,10 @@ def main():
         logging.warning("got no audios.")
         return
 
-    mkdir(dir)
-    clean_dir(os.path.join(dir, links_dir))
+    mkdir(path)
+    clean_dir(links_dir)
 
-    audio.download_audio_list(th_pool_sz, audio_list, dir, links_dir, ans)
+    audio.download_audio_list(th_pool_sz, audio_list, path, links_dir, ans)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='\n%(message)s')
