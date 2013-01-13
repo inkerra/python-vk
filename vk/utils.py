@@ -4,6 +4,7 @@ import shutil
 import locale
 import urllib2
 from HTMLParser import HTMLParser
+from contextlib import closing
 
 MB = 1024.0 ** 2
 
@@ -54,7 +55,8 @@ def valid_filename(s):
     return __unicode(unescape(s)).translate(unsupported)
 
 def remote_file_size(url):
-    return int(urllib2.urlopen(url).info().getheader("Content-Length"))
+    with closing(urllib2.urlopen(url)) as handle:
+        return int(handle.info().getheader("Content-Length"))
 
 def local_file_size(path):
     return os.path.getsize(path) if os.path.exists(path) else 0

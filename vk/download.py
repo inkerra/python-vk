@@ -2,6 +2,7 @@ import urllib2
 import sys
 import threading
 from utils import MB, remote_file_size, local_file_size
+from contextlib import closing
 
 BLOCK_SIZE = 1024
 
@@ -24,14 +25,15 @@ def download_file(path, url, progress_bar=None):
     req.headers['Range'] = 'bytes=%d-' % sz
 
     with open(path, "ab" if sz else "wb") as fd:
-        remote_fd = urllib2.urlopen(req)
-        written = sz
+        with closing(urllib2.urlopen(req)) as remote_fd:
+            remote_fd = urllib2.urlopen(req)
+            written = sz
 
-        while written < remote_sz:
-            block = remote_fd.read(BLOCK_SIZE)
-            fd.write(block)
-            written += len(block)
-            if progress_bar: progress_bar.show(written, remote_sz)
+            while written < remote_sz:
+                block = remote_fd.read(BLOCK_SIZE)
+                fd.write(block)
+                written += len(block)
+                if progress_bar: progress_bar.show(written, remote_sz)
 
 class DownloaderThread(threading.Thread):
     """ Threaded downloader """

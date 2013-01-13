@@ -9,6 +9,7 @@ from download import download_file, DownloadProgressBar, DownloaderThread
 from utils import *
 import re
 from glob import glob
+from contextlib import closing
 
 MAX_ARTIST_LEN = 40
 MAX_TITLE_LEN = 60
@@ -53,8 +54,14 @@ def download_audio((i, audio), total, path, lnks_path, m_th=True):
     else:
         tmp_name = norm_path(path, audio.id_name)
 
+
         sz = local_file_size(tmp_name)
-        remote_sz = remote_file_size(audio.url)
+        try:
+            remote_sz = remote_file_size(audio.url)
+        except urllib2.URLError as e:
+            logging.critical("Skipping file: %s.\n" \
+                + "Can't get access to %s: %s", audio.name, audio.url, e)
+            return
 
         logging.debug("[#%d] %s - %d (%.02fM)",
             i + 1, audio.url, remote_sz, remote_sz / MB)
@@ -76,6 +83,8 @@ def download_audio((i, audio), total, path, lnks_path, m_th=True):
         try:
             os.rename(tmp_name, filepath)
         except OSError as e:
+            print tmp_name, " AND ", filepath
+            print type(tmp_name), " AND ", type(filepath)
             raise RuntimeError("Can't rename: %s -> %s" \
                 % (tmp_name, filepath))
 
@@ -118,11 +127,11 @@ class Audio(object):
     def __init__(self, audio, vk_name, id_name, dbl=0):
         self.audio = audio
         self.vk_name = vk_name
+        self.id_name = id_name
         self.dbl = dbl
 
     def __call__(self):
         self.url = self.audio.find("url").text
-        self.id_name = basename(self.url)
         sh_title_lim = SHORT_TITLE_LIM - (MAX_ID_NAME_LIM if self.dbl else 0)
         short = artist_title(self.audio, SHORT_ARTIST_LIM, sh_title_lim, '..')
         if self.dbl:
@@ -195,5 +204,6 @@ def download_audio_list(th_pool_sz, audio_list, path, lnks_path, ans=None):
 def get_audio_list(user_id, access_token):
     url = "https://api.vkontakte.ru/method/audio.get.xml?" \
             + "uid=%s&access_token=%s" % (user_id, access_token)
-    doc  = html.document_fromstring(urllib2.urlopen(url).read())
-    return doc.cssselect('audio')
+    with closing(urllib2.urlopen(url)) as handle:
+        doc  = html.document_fromstring(handle.read())
+        return doc.cssselect('audio')
