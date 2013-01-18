@@ -6,8 +6,7 @@ import threading
 import Queue
 import logging
 from download import download_file, DownloadProgressBar, DownloaderThread
-from utils import *
-import re
+import utils
 from glob import glob
 from contextlib import closing
 
@@ -21,6 +20,7 @@ MAX_ID_NAME_LIM = 13
 
 FILENAME_FMT = "%s.mp3"
 
+
 class AudioDownloadProgressBar(DownloadProgressBar):
     def show(self, written_len, remote_sz):
         if self.multithreading:
@@ -29,7 +29,7 @@ class AudioDownloadProgressBar(DownloadProgressBar):
                 + "#%-5d(%-5.02fMB %3d%%)" \
                 % (
                     self.idx + 1,
-                    written_len / MB,
+                    written_len / utils.MB,
                     100.0 * written_len / remote_sz
                 )
         else:
@@ -38,33 +38,34 @@ class AudioDownloadProgressBar(DownloadProgressBar):
                     self.idx + 1,
                     self.total,
                     self.name,
-                    written_len / MB,
+                    written_len / utils.MB,
                     100.0 * written_len / remote_sz
                 )
 
         sys.stdout.write(progress)
         sys.stdout.flush()
 
+
 def download_audio((i, audio), total, path, lnks_path, m_th=True):
-    filepath = norm_path(path, audio.name)
+    filepath = utils.norm_path(path, audio.name)
 
     if os.path.exists(filepath):
         logging.debug("[%d/%d] \"%s\" has been downloaded.",
-            i + 1, total, filepath)
+                      i + 1, total, filepath)
     else:
-        tmp_name = norm_path(path, audio.id_name)
+        tmp_name = utils.norm_path(path, audio.id_name)
 
-
-        sz = local_file_size(tmp_name)
+        sz = utils.local_file_size(tmp_name)
         try:
-            remote_sz = remote_file_size(audio.url)
+            remote_sz = utils.remote_file_size(audio.url)
         except urllib2.URLError as e:
-            logging.critical("Skipping file: %s.\n" \
-                + "Can't get access to %s: %s", audio.name, audio.url, e)
+            logging.critical("Skipping file: %s.\n" +
+                             "Can't get access to %s: %s",
+                             audio.name, audio.url, e)
             return
 
         logging.debug("[#%d] %s - %d (%.02fM)",
-            i + 1, audio.url, remote_sz, remote_sz / MB)
+                      i + 1, audio.url, remote_sz, remote_sz / utils.MB)
 
         if sz != remote_sz:
             if logging.getLogger().isEnabledFor(logging.INFO):
@@ -73,10 +74,10 @@ def download_audio((i, audio), total, path, lnks_path, m_th=True):
             else:
                 progress_bar = None
 
-            logging.log(logging.WARNING if m_th or not progress_bar \
-                else logging.DEBUG,
-                "[#%d/%d] \"%s\" (%s, %s bytes)",
-                i + 1, total, filepath, audio.id_name, remote_sz - sz)
+            logging.log(logging.WARNING if m_th or not progress_bar
+                        else logging.DEBUG,
+                        "[#%d/%d] \"%s\" (%s, %s bytes)",
+                        i + 1, total, filepath, audio.id_name, remote_sz - sz)
 
             download_file(tmp_name, audio.url, progress_bar)
 
@@ -85,11 +86,11 @@ def download_audio((i, audio), total, path, lnks_path, m_th=True):
         except OSError as e:
             print tmp_name, " AND ", filepath
             print type(tmp_name), " AND ", type(filepath)
-            raise RuntimeError("Can't rename: %s -> %s" \
-                % (tmp_name, filepath))
+            raise RuntimeError("Can't rename: %s -> %s" % (tmp_name, filepath))
 
-    relpath = os.path.relpath(os.path.abspath(path), os.path.abspath(lnks_path))
-    new_path = norm_path(relpath, audio.name)
+    relpath = os.path.relpath(os.path.abspath(path),
+                              os.path.abspath(lnks_path))
+    new_path = utils.norm_path(relpath, audio.name)
 
     lnk_fmt = "%%0%dd=%%s" % len(str(total))
     lnk = lnk_fmt % (i + 1, audio.name)
@@ -97,21 +98,24 @@ def download_audio((i, audio), total, path, lnks_path, m_th=True):
     if sys.platform.startswith('win'):
         lnk = ''.join(lnk.rpartition('.')[:-1] + ('lnk',))
 
-    lnk_path = norm_path(lnks_path, lnk)
+    lnk_path = utils.norm_path(lnks_path, lnk)
 
     try:
-        symlink(new_path, lnk_path)
+        utils.symlink(new_path, lnk_path)
     except Exception as e:
-        raise RuntimeError("Can't create link: %s -> %s" \
-            % (lnk_path, new_path))
+        raise RuntimeError("Can't create link: %s -> %s"
+                           % (lnk_path, new_path))
     logging.debug("[#%d] %s -> %s", i + 1, lnk_path, new_path)
+
 
 def audio_elem(audio, elem):
     t = audio.find(elem).text
-    return valid_filename(t) if t else u''
+    return utils.valid_filename(t) if t else u''
+
 
 def get_id_name(audio):
-    return basename(audio.find("url").text)
+    return utils.basename(audio.find("url").text)
+
 
 def artist_title(audio, a_lim=MAX_ARTIST_LEN, t_lim=MAX_TITLE_LEN, tail=''):
     artist = (audio_elem(audio, 'artist'), a_lim)
@@ -122,6 +126,7 @@ def artist_title(audio, a_lim=MAX_ARTIST_LEN, t_lim=MAX_TITLE_LEN, tail=''):
         return name[:(lim - len(tail))] + tail if len(name) > lim else name
 
     return "%s__%s" % (cut(artist, title, tail), cut(title, artist, tail))
+
 
 class Audio(object):
     def __init__(self, audio, vk_name, id_name, dbl=0):
@@ -140,6 +145,7 @@ class Audio(object):
         else:
             self.name = FILENAME_FMT % self.vk_name
             self.short_name = FILENAME_FMT % short
+
 
 def download_audio_list(th_pool_sz, audio_list, path, lnks_path, ans=None):
     vk_names = {}
@@ -188,12 +194,12 @@ def download_audio_list(th_pool_sz, audio_list, path, lnks_path, ans=None):
 
     files = glob(os.path.join(path, FILENAME_FMT % '*'))
     playlist = {audio.name for audio in audios}
-    old = [f for f in files if basename(f) not in playlist]
+    old = [f for f in files if utils.basename(f) not in playlist]
 
     if old:
         logging.info('Outdated audios:\n' + '\n'.join(old))
         if not ans:
-            prompt = "Delete outdated audios?[%d] (y or n) [n] " %  len(old)
+            prompt = "Delete outdated audios?[%d] (y or n) [n] " % len(old)
             ans = raw_input(prompt)
         if y_or_n(ans) == 'y':
             for f in old:
@@ -201,9 +207,10 @@ def download_audio_list(th_pool_sz, audio_list, path, lnks_path, ans=None):
                 os.remove(f)
             logging.warning("Deleted outdated files [%d].", len(old))
 
+
 def get_audio_list(user_id, access_token):
     url = "https://api.vkontakte.ru/method/audio.get.xml?" \
-            + "uid=%s&access_token=%s" % (user_id, access_token)
+          + "uid=%s&access_token=%s" % (user_id, access_token)
     with closing(urllib2.urlopen(url)) as handle:
-        doc  = html.document_fromstring(handle.read())
+        doc = html.document_fromstring(handle.read())
         return doc.cssselect('audio')
